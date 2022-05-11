@@ -1,0 +1,105 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: awx-app-admin-password
+  namespace: awx
+stringData:
+  password: awxly
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: awx-app-postgres-configuration
+  namespace: awx
+stringData:
+  type: managed
+  host: awx-app-postgres
+  port: "5432"
+  database: awx
+  username: awx
+  password: awxly
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-storage-pgsql
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-storage-projects
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pgsql-storage
+spec:
+  storageClassName: local-storage-pgsql
+  volumeMode: Filesystem
+  persistentVolumeReclaimPolicy: Retain
+  local:
+    path: /mnt/k8s/pgsql
+  accessModes:
+  - ReadWriteMany
+  capacity:
+    storage: 50Gi
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - minikube
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: projects-storage
+spec:
+  storageClassName: local-storage-projects
+  volumeMode: Filesystem
+  persistentVolumeReclaimPolicy: Retain
+  local:
+    path: /mnt/k8s/projects
+  accessModes:
+  - ReadWriteMany
+  capacity:
+    storage: 50Gi
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - minikube
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-awx-app-postgres-0
+  namespace: awx
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: local-storage-pgsql
+---
+apiVersion: awx.ansible.com/v1beta1
+kind: AWX
+metadata:
+  name: awx-app
+spec:
+  service_type: nodeport
+  projects_persistence: true
+  projects_storage_class: local-storage-projects
+  postgres_storage_class: local-storage-pgsql
